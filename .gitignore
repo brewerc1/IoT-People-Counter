@@ -33,3 +33,7 @@
 .Ds_Store
 AWSIoTLambda/IoTLambda/node_modules
 AWSIoTLambda/.idea/
+AWSIoTLambdaHandler/.idea/
+AWSIoTLambdaHandler/.mvn/
+AWSIoTLambda/IoTLambdaHandler/.idea/
+AWSIoTLambda/IoTLambdaHandler/.mvn/
