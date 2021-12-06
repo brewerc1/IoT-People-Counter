@@ -30,6 +30,8 @@
 *.exe
 *.out
 *.app
+
+# Lambda
 .Ds_Store
 AWSIoTLambda/IoTLambda/node_modules
 AWSIoTLambda/.idea/
