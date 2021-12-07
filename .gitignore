@@ -42,3 +42,5 @@ AWSIoTLambda/IoTLambdaHandler/.mvn/
 AWSIoTLambda/IoTLambdaHandler/target/
 AWSIoTLambda/IoTLambda/aws_account.tx
 AWSIoTLambda/IoTLambda/aws_account.txt
+AWSIoTLambda/IoTLambdaHandler/.gradle/
+AWSIoTLambda/IoTLambdaHandler/build/

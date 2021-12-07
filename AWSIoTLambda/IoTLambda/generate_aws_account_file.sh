@@ -6,4 +6,4 @@ read -r account
 echo "AWS Region:"
 read -r region
 
-echo "$account/$region" >> "aws_account.txt"
+echo "$account/$region" > "aws_account.txt"

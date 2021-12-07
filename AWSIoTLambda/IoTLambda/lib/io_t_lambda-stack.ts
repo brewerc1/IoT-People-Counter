@@ -3,7 +3,7 @@ import {Construct} from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as path from "path";
 import {Effect, PolicyStatement} from "aws-cdk-lib/aws-iam";
-import {Queue} from "aws-cdk-lib/aws-sqs";
+import { Queue } from "aws-cdk-lib/aws-sqs";
 
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 
@@ -12,14 +12,14 @@ export class IoTLambdaStack extends Stack {
     super(scope, `${id}-1`, props);
 
     // The code that defines your stack goes here
-    const lambdaFunction = new lambda.Function(this, 'IoTLambdaFunction', {
+    const lambdaFunction = new lambda.Function(this, 'IoTLambdaFunction-1', {
       runtime: lambda.Runtime.JAVA_11,
-      handler: 'IoTLambdaHandler.AWSIoTLambdaHandler::handleRequest',
-      code: lambda.Code.fromAsset(path.join('../IoTLambdaHandler/target', 'classes'))
+      handler: 'handler.Handler::handleRequest',
+      code: lambda.Code.fromAsset(path.join('../IoTLambdaHandler/build/IoTLambdaHandler-lib.zip'))
     });
 
     // SQS
-    const sqs = new Queue(this, 'IoTSQS', {});
+    const sqs = new Queue(this, 'IoTSQS-1', {});
     sqs.grant(lambdaFunction, '*');
     sqs.grantConsumeMessages(lambdaFunction);
 
