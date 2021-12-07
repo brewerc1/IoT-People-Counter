@@ -9,11 +9,15 @@ export class IoTLambdaStack extends Stack {
     super(scope, id, props);
 
     // The code that defines your stack goes here
+    console.log(__dirname);
+    console.log(__filename);
     const lambdaFunction = new lambda.Function(this, 'IoTLambdaFunction', {
       runtime: lambda.Runtime.JAVA_11,
-      handler: '',
-      code: lambda.Code.fromAsset(path.join(__dirname, 'lambda'))
+      handler: 'IoTLambdaHandler.AWSIoTLambdaHandler::handleRequest',
+      code: lambda.Code.fromAsset(path.join('../IoTLambdaHandler/target', 'classes'))
     });
+
+
 
     // example resource
     // const queue = new sqs.Queue(this, 'IoTLambdaQueue', {
