@@ -15,7 +15,7 @@ export class IoTLambdaStack extends Stack {
     const lambdaFunction = new lambda.Function(this, 'IoTLambdaFunction-1', {
       runtime: lambda.Runtime.JAVA_11,
       handler: 'handler.Handler::handleRequest',
-      code: lambda.Code.fromAsset(path.join('../IoTLambdaHandler/build/IoTLambdaHandler-lib.zip'))
+      code: lambda.Code.fromAsset(path.join('../IoTLambdaHandler/build/distributions/IoTLambdaHandler.zip'))
     });
 
     // SQS
