@@ -2,26 +2,6 @@ plugins {
     id 'java'
 }
 
-//compileJava {
-//    options.release = 8
-//}
-//
-//sourceSets {
-//    main {
-//        java {
-//            srcDirs = ['src']
-//        }
-//    }
-//
-//    test {
-//        java {
-//            srcDirs = ['test']
-//        }
-//    }
-//}
-
-//sourceCompatibility = 1.8
-
 repositories {
     mavenCentral()
 }
@@ -45,14 +25,6 @@ dependencies {
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.6.0'
 }
 
-//task buildZip(type: Zip) {
-//    from compileJava
-//    from processResourses
-//    into('lib') {
-//        from configurations.runtimeClasspath
-//    }
-//}
-
 task packageFat(type: Zip) {
     from compileJava
     from processResources
@@ -69,37 +41,3 @@ java {
 }
 
 build.dependsOn packageFat
-
-//test {
-//    useJUnitPlatform()
-//}
-
-//task packageFat(type: Zip) {
-//    from compileJava
-//    from processResources
-//    into('lib') {
-//        from configurations.runtimeClasspath
-//    }
-//    dirMode = 0755
-//    fileMode = 0755
-//}
-//
-//task packageLibs(type: Zip) {
-//    into('java/lib') {
-//        from configurations.runtimeClasspath
-//    }
-//    dirMode = 0755
-//    fileMode = 0755
-//}
-//
-//task packageSkinny(type: Zip) {
-//    from compileJava
-//    from processResources
-//}
-//
-//java {
-//    sourceCompatibility = JavaVersion.VERSION_1_8
-//    targetCompatibility = JavaVersion.VERSION_1_8
-//}
-//
-//build.dependsOn packageSkinny
