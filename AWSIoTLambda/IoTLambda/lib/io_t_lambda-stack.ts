@@ -52,9 +52,6 @@ export class IoTLambdaStack extends Stack {
       credentials: rds.Credentials.fromGeneratedSecret(props.dbUsername),
       instanceProps: {
         instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.SMALL),
-        // vpcSubnets: {
-        //   subnetType: ec2.SubnetType.PRIVATE_ISOLATED
-        // },
         vpc: vpc
       },
       defaultDatabaseName: 'IoTDb',
