@@ -11,10 +11,13 @@ dependencies {
     implementation platform('com.amazonaws:aws-xray-recorder-sdk-bom:2.4.0')
     implementation 'software.amazon.awssdk:lambda'
     implementation 'com.amazonaws:aws-xray-recorder-sdk-core'
+    implementation 'com.amazonaws:aws-java-sdk-rds:1.11.1000'
+    implementation 'com.amazonaws:aws-java-sdk-secretsmanager:1.11.1000'
     implementation 'com.amazonaws:aws-xray-recorder-sdk-aws-sdk-core'
     implementation 'com.amazonaws:aws-xray-recorder-sdk-aws-sdk-v2'
     implementation 'com.amazonaws:aws-xray-recorder-sdk-aws-sdk-v2-instrumentor'
     implementation 'com.amazonaws:aws-lambda-java-core:1.2.1'
+    implementation 'mysql:mysql-connector-java:8.0.17'
     implementation 'com.amazonaws:aws-lambda-java-events:2.2.9'
     implementation 'com.google.code.gson:gson:2.8.6'
     implementation 'org.apache.logging.log4j:log4j-api:2.13.0'
