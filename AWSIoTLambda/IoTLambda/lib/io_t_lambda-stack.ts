@@ -13,6 +13,7 @@ export interface IoTLambdaStackProps {
   region: string;
   dbPort: string;
   dbUsername: string;
+  dbName: string;
 }
 
 
@@ -54,7 +55,7 @@ export class IoTLambdaStack extends Stack {
         instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.SMALL),
         vpc: vpc
       },
-      defaultDatabaseName: 'IoTDb',
+      defaultDatabaseName: props.dbName,
       port: Number(props.dbPort)
     });
 
@@ -65,7 +66,8 @@ export class IoTLambdaStack extends Stack {
       code: lambda.Code.fromAsset(path.join('../IoTLambdaHandler/build/distributions/IoTLambdaHandler.zip')),
       environment: {
         'region': props.region,
-        'dbInstanceSecretArn': cluster.secret?.secretArn || "default"
+        'dbInstanceSecretArn': cluster.secret?.secretArn || "default",
+        'dbname': props.dbName
       },
       timeout: Duration.minutes(TIME_OUT_IN_MINUTES),
       memorySize: 256,

@@ -18,7 +18,7 @@ public class DBConnection implements SQLDb {
     }
     @Override
     public Connection getDBConnection() throws SQLException {
-        if (connection != null && !connection.isClosed())
+        if (connection == null || connection.isClosed())
             connection = DriverManager.getConnection(jdbc.toString(), dbSecret.getDbUsername(), dbSecret.getDbPassword());
         return connection;
     }
