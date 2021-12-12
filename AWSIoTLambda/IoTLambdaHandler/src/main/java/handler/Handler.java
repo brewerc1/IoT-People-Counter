@@ -30,13 +30,17 @@ public class Handler implements RequestHandler<SQSEvent, Void>{
 
     try {
       // Connect to DB
+      logger.log("Connecting to db");
       conn = db.getDBConnection();
       logger.log("Connected to db");
 
       // Select Database
-      String sql = "USE " + System.getenv("dbname") + ";";
+      String dbName = System.getenv("dbname");
+      logger.log("USE " + dbName + ";");
+      String sql = "USE " + dbName + ";";
       stmt = conn.prepareStatement(sql);
       stmt.execute(sql);
+      logger.log("Database " + dbName + " Selected");
 
       // Create tables if not exist
       StringBuilder sqlStatement = new StringBuilder();
@@ -47,12 +51,13 @@ public class Handler implements RequestHandler<SQSEvent, Void>{
       sqlStatement.append("timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP");
       sqlStatement.append(")");
       stmt = conn.prepareStatement(sqlStatement.toString());
-      if (stmt.execute(sqlStatement.toString())) logger.log("peopleCounter table created: " + sqlStatement);
+      if (stmt.executeUpdate() > 0) logger.log("peopleCounter table created: " + sqlStatement);
 
       // Insert into the db
       int deviceId;
       int total;
       for (SQSMessage message: sqsEvent.getRecords()) {
+        logger.log("Processing: " + message.getBody());
         if (processedMessagesHashCodes.contains(message.hashCode()))
           continue;
 
@@ -68,25 +73,26 @@ public class Handler implements RequestHandler<SQSEvent, Void>{
           stmt.setInt(2, total);
 
           if (stmt.executeUpdate() < 1) logger.log("Insertion failed.");
-          else logger.log(message.getBody() + " Inserted");
+          else logger.log("Insertion succeeded");
 
         }
         processedMessagesHashCodes.add(message.hashCode());
       }
 
+      // Only for testing if data are in table
       String select = "SELECT * FROM peopleCounter;";
-      try (ResultSet res = stmt.executeQuery(select)) {
-        StringBuilder sb = new StringBuilder();
-        while (res.next()) {
-          sb.append("[");
-          sb.append(res.getString("id"));
-          sb.append(res.getString("device"));
-          sb.append(res.getString("total"));
-          sb.append(res.getTimestamp("timestamp"));
-          sb.append("]");
-        }
-        logger.log(sb.toString());
+      stmt = conn.prepareStatement(select);
+      ResultSet res = stmt.executeQuery();
+      StringBuilder sb = new StringBuilder();
+      while (res.next()) {
+        sb.append("{\n");
+        sb.append("id: ").append(res.getString(1)).append(",\n");
+        sb.append("device: ").append(res.getString(2)).append(",\n");
+        sb.append("total: ").append(res.getString(3)).append(",\n");
+        sb.append("timestamp: ").append(res.getTimestamp(4));
+        sb.append("\n}\n");
       }
+      logger.log(sb.toString());
 
 
     } catch (SQLException e) {
