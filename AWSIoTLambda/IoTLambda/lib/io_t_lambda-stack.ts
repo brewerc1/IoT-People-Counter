@@ -48,15 +48,27 @@ export class IoTLambdaStack extends Stack {
       ]
     });
 
-    const cluster = new rds.DatabaseCluster(this, `IoTDb-${props.region}`, {
+    // const cluster = new rds.DatabaseCluster(this, `IoTDb-${props.region}`, {
+    //   engine: rds.DatabaseClusterEngine.AURORA_MYSQL,
+    //   credentials: rds.Credentials.fromGeneratedSecret(props.dbUsername),
+    //   instanceProps: {
+    //     instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.SMALL),
+    //     vpc: vpc
+    //   },
+    //   defaultDatabaseName: props.dbName,
+    //   port: Number(props.dbPort),
+    // });
+
+    const cluster = new rds.ServerlessCluster(this, `${props.dbName}-${props.region}`, {
       engine: rds.DatabaseClusterEngine.AURORA_MYSQL,
-      credentials: rds.Credentials.fromGeneratedSecret(props.dbUsername),
-      instanceProps: {
-        instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE2, ec2.InstanceSize.SMALL),
-        vpc: vpc
+      vpc,
+      scaling: {
+        autoPause: Duration.minutes(10), // default is to pause after 5 minutes of idle time
+        minCapacity: rds.AuroraCapacityUnit.ACU_8, // default is 2 Aurora capacity units (ACUs)
+        maxCapacity: rds.AuroraCapacityUnit.ACU_32, // default is 16 Aurora capacity units (ACUs)
       },
       defaultDatabaseName: props.dbName,
-      port: Number(props.dbPort)
+      credentials: rds.Credentials.fromGeneratedSecret(props.dbUsername),
     });
 
     // The code that defines your stack goes here
@@ -66,8 +78,7 @@ export class IoTLambdaStack extends Stack {
       code: lambda.Code.fromAsset(path.join('../IoTLambdaHandler/build/distributions/IoTLambdaHandler.zip')),
       environment: {
         'region': props.region,
-        'dbInstanceSecretArn': cluster.secret?.secretArn || "default",
-        'dbname': props.dbName
+        'dbInstanceSecretArn': cluster.secret?.secretArn || "default"
       },
       timeout: Duration.minutes(TIME_OUT_IN_MINUTES),
       memorySize: 256,
@@ -79,6 +90,5 @@ export class IoTLambdaStack extends Stack {
 
     sqs.grant(lambdaFunction, '*');
     sqs.grantConsumeMessages(lambdaFunction);
-
   }
 }

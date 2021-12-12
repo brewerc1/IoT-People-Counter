@@ -3,26 +3,30 @@ package handler;
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.LambdaLogger;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
+import com.amazonaws.services.lambda.runtime.events.SQSBatchResponse;
 import com.amazonaws.services.lambda.runtime.events.SQSEvent;
 import com.amazonaws.services.lambda.runtime.events.SQSEvent.SQSMessage;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 import db.DBConnection;
 import db.DBSecret;
 import db.SQLDb;
 
 import java.sql.*;
-import java.util.TreeSet;
+import java.util.ArrayList;
+import java.util.List;
 
 // Handler value: handler.Handler
-public class Handler implements RequestHandler<SQSEvent, Void>{
-  private final TreeSet<Integer> processedMessagesHashCodes = new TreeSet<>();
+public class Handler implements RequestHandler<SQSEvent, SQSBatchResponse>{
   private Connection conn;
   private PreparedStatement stmt;
   @Override
-  public Void handleRequest(SQSEvent sqsEvent, Context context) {
+  public SQSBatchResponse handleRequest(SQSEvent sqsEvent, Context context) {
+    List<SQSBatchResponse.BatchItemFailure> batchItemFailures = new ArrayList<>();
     LambdaLogger logger = context.getLogger();
 
+    // Creating database object
     String region = System.getenv("region");
     String secretArn = System.getenv("dbInstanceSecretArn");
     DBSecret dbSecret = new DBSecret(region, secretArn);
@@ -35,8 +39,8 @@ public class Handler implements RequestHandler<SQSEvent, Void>{
       logger.log("Connected to db");
 
       // Select Database
-      String dbName = System.getenv("dbname");
-      logger.log("USE " + dbName + ";");
+      String dbName = dbSecret.getDbName();
+      logger.log("USE " + dbSecret.getDbName() + ";");
       String sql = "USE " + dbName + ";";
       stmt = conn.prepareStatement(sql);
       stmt.execute(sql);
@@ -56,30 +60,37 @@ public class Handler implements RequestHandler<SQSEvent, Void>{
       // Insert into the db
       int deviceId;
       int total;
+      String messageId = "";
       for (SQSMessage message: sqsEvent.getRecords()) {
-        logger.log("Processing: " + message.getBody());
-        if (processedMessagesHashCodes.contains(message.hashCode()))
-          continue;
+        try {
+          logger.log("Processing: " + message.getBody());
+          messageId = message.getMessageId();
 
-        JsonObject sqsMessage = new Gson().fromJson(message.getBody(), JsonObject.class);
-        if (sqsMessage.has("device") && sqsMessage.has("total")) {
+          JsonObject sqsMessage = new Gson().fromJson(message.getBody(), JsonObject.class);
+          if (sqsMessage.has("device") && sqsMessage.has("total")) {
 
-          deviceId = sqsMessage.get("device").getAsInt();
-          total = sqsMessage.get("total").getAsInt();
+            deviceId = sqsMessage.get("device").getAsInt();
+            total = sqsMessage.get("total").getAsInt();
 
-          sql = "INSERT INTO peopleCounter(device, total) VALUES(?,?)";
-          stmt = conn.prepareStatement(sql);
-          stmt.setInt(1, deviceId);
-          stmt.setInt(2, total);
+            sql = "INSERT INTO peopleCounter(device, total) VALUES(?,?)";
+            stmt = conn.prepareStatement(sql);
+            stmt.setInt(1, deviceId);
+            stmt.setInt(2, total);
 
-          if (stmt.executeUpdate() < 1) logger.log("Insertion failed.");
-          else logger.log("Insertion succeeded");
-
+            if (stmt.executeUpdate() < 1) logger.log("Insertion failed.");
+            else logger.log("Insertion succeeded");
+          }
+        } catch (JsonSyntaxException e) {
+          // If JSON Syntax Error, message will be ignored and treated as processed
+          logger.log(e.getMessage());
+        } catch (SQLException e) {
+          // If SQL Error, the id of the message is returned, so it can be processed later.
+          batchItemFailures.add(new SQSBatchResponse.BatchItemFailure(messageId));
+          logger.log(e.getMessage());
         }
-        processedMessagesHashCodes.add(message.hashCode());
       }
 
-      // Only for testing if data are in table
+      // TODO: Only for testing if data are in table
       String select = "SELECT * FROM peopleCounter;";
       stmt = conn.prepareStatement(select);
       ResultSet res = stmt.executeQuery();
@@ -93,7 +104,7 @@ public class Handler implements RequestHandler<SQSEvent, Void>{
         sb.append("\n}\n");
       }
       logger.log(sb.toString());
-
+      // TODO: End testing
 
     } catch (SQLException e) {
       e.printStackTrace();
@@ -105,6 +116,6 @@ public class Handler implements RequestHandler<SQSEvent, Void>{
         e.printStackTrace();
       }
     }
-    return null;
+    return new SQSBatchResponse(batchItemFailures);
   }
 }
