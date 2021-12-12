@@ -56,7 +56,7 @@ export class IoTLambdaStack extends Stack {
         vpc: vpc
       },
       defaultDatabaseName: props.dbName,
-      port: Number(props.dbPort)
+      port: Number(props.dbPort),
     });
 
     // The code that defines your stack goes here
@@ -66,8 +66,7 @@ export class IoTLambdaStack extends Stack {
       code: lambda.Code.fromAsset(path.join('../IoTLambdaHandler/build/distributions/IoTLambdaHandler.zip')),
       environment: {
         'region': props.region,
-        'dbInstanceSecretArn': cluster.secret?.secretArn || "default",
-        'dbname': props.dbName
+        'dbInstanceSecretArn': cluster.secret?.secretArn || "default"
       },
       timeout: Duration.minutes(TIME_OUT_IN_MINUTES),
       memorySize: 256,
