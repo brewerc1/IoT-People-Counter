@@ -2,7 +2,7 @@
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
 import {IoTLambdaStack, IoTLambdaStackProps} from '../lib/io_t_lambda-stack';
-import { account, dbUsername } from "../aws_account";
+import {account, dbname, dbUsername} from "../aws_account";
 import {StackProps} from "aws-cdk-lib";
 
 const stackProps: StackProps = {
@@ -14,7 +14,8 @@ const props: IoTLambdaStackProps = {
     account: `${account.account_id}`,
     region: account.region,
     dbPort: "3306",
-    dbUsername: dbUsername
+    dbUsername: dbUsername,
+    dbName: dbname
 }
 
 const app = new cdk.App();
