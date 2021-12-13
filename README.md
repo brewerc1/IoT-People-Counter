@@ -30,9 +30,9 @@ store them in RDS.
 
 ![This is an image](images/backend.png)
 
-###Deploy to AWS
+######Deploy to AWS
 
-####Prerequisite
+######Prerequisite
 * Java 11
 * NodeJs > 11
 * TypeScript
