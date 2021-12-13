@@ -1,235 +1,293 @@
-// Current issues: Person standing in the doorway gets counted when they finally move (direction is usually correct)
-// They should not be counted at all: what if somebody stands in the door and moves in repeatadley? Then they inflate the in count
-// Need to somehow set a flag
+/*
+  ESP32:
+  SDA -> GPIO21
+  SCL -> GPIO22
+  VCC -> 5V
+  GND -> GND
+*/
 
-#include "VL53L1X_ULD.h"
+#include <Wire.h>
+#include "SparkFun_VL53L1X.h"
+#include "secrets.h"
+#include "WiFiConnector.h"
+#include "AWSIoTConnector.h"
 
-#define THRESHOLD_AMOUNT 3
+// Zone states
+static int NOBODY = 0;
+static int SOMEONE = 1;
 
-// Sensor obj and sensor status
-VL53L1X_ULD sensor;
-VL53L1_Error status;
+// Zone names
+static int LEFT = 0;
+static int RIGHT = 1;
 
-#define MIN_HEIGHT 1370 // (~4ft 6in)
+// Threshold to consider an entrance, exit
+static int DIST_THRESHOLD_MAX[] = {0, 0};
 
-// Center in SPAD array (167  = left center, 231 = right center)
-int center[2] = { 167, 231 };
+// SPAD array location for the zones
+static int center[2] = {239, 175};
 
-// Baseline distance for sensor, calibrated in setup
-// Long to avoid overflow during calibration
-long baseline[2];
-// How close you need to be to trigger (so we don't count something like a chair as a person)
-// distance must be < threshold to trigger
-int thresholds[2];
+// Current zone
+static int Zone = 0;
 
-// 0 = left, 1 = right
-// Swapped during each iteration
-int zone = 0;
-// Buffers for each zone
-#define BUFFER_LENGTH 15
-int lBuffer[BUFFER_LENGTH];
-int rBuffer[BUFFER_LENGTH];
+// Size of each location in SPAD array (5x5)
+static int ROI_height = 5;
+static int ROI_width = 5;
 
-// Measured distance, status
-uint16_t distance;
-ERangeStatus rangeStatus;
+// Path tracking algorithm
+static int PathTrack[] = {0, 0, 0, 0};
+static int PathTrackFillingSize = 1;
+static int LeftPreviousStatus = NOBODY;
+static int RightPreviousStatus = NOBODY;
 
-void setup() {
-  Serial.begin(115200);
-  initializeSensor();
-  configureSensor();
-  calibrateBaseline();
-  flushBuffers();
-}
+// Sensor object
+SFEVL53L1X lidarSensor(Wire);
 
-void loop() {
-  uint8_t dataReady = false;
-  while (!dataReady) {
-    sensor.CheckForDataReady(&dataReady);
-    delay(5);
-  }
+// Current count
+// Needed by both tasks
+static int peopleInRoom = 0;
 
-  sensor.GetRangeStatus(&rangeStatus);
-  sensor.GetDistanceInMm(&distance);
-  sensor.ClearInterrupt();
+// Two tasks
+TaskHandle_t PeopleCounterTaskHandler;
+TaskHandle_t PublishDataTaskHandler;
 
-  // Populate buffers
-  if (zone == 0) {
-    rightRotate(lBuffer, BUFFER_LENGTH);
-    lBuffer[0] = distance;
-  } else {
-    rightRotate(rBuffer, BUFFER_LENGTH);
-    rBuffer[0] = distance;
-  }
-
-  checkForPeople();
-
-  zone++;
-  zone = zone % 2;
-  sensor.SetROICenter(center[zone]);
-}
-
-void checkForPeople() {
-  uint8_t firstL = -1; // Index of first occurence in left buffer
-  uint8_t firstR = -1; // Index of first occurence in right buffer
-
-  uint8_t consL = 0; // Consecutive threshold occurences in left buffer
-  uint8_t consR = 0; // Consecutive threshold occurences in right buffer
-
-  bool lastTL = false; // Was the last reading below threshold in left buffer?
-  bool lastTR = false; // Was the last reading below threshold in right buffer?
-
-
-  // TODO: abstract into function to avoid copy paste
-  for (uint8_t i = 0; i < BUFFER_LENGTH; i++) {
-    if (consL >= THRESHOLD_AMOUNT) {
-      if (lBuffer[i] < thresholds[0]) {
-        consL++;
-        lastTL = true;
-        continue;
-      } else {  if (firstL != 0) break; } 
-    }
-
-    if (lBuffer[i] < thresholds[0]) {
-      if (!lastTL) {
-        firstL = i;
-      }
-      lastTL = true;
-      consL++;
-    } else {
-      lastTL = false;
-      consL = 0;
-    }
-  }
-
-  // See above TODO
-  for (uint8_t i = 0; i < BUFFER_LENGTH; i++) {
-    if (consR >= THRESHOLD_AMOUNT) {
-      if (rBuffer[i] < thresholds[1]) {
-        consR++;
-        lastTR = true;
-        continue;
-      } else { if (firstR != 0) break; } 
-    }
-    
-    if (rBuffer[i] < thresholds[1]) {
-      if (!lastTR) {
-        firstR = i;
-      }
-      lastTR = true;
-      consR++;
-    } else {
-      lastTR = false;
-      consR = 0;
-    }
-  }
-
-  if (consL == BUFFER_LENGTH && consR == BUFFER_LENGTH) { 
-    Serial.println("Person standing in the doorway, move!");
-    flushBuffers();
-    return;  
-  }
-
-  if (consL >= THRESHOLD_AMOUNT && consR >= THRESHOLD_AMOUNT) {
-    if (firstL < firstR) {
-      Serial.println("Out");
-    } else if (firstR < firstL) {
-      Serial.println("In");
-    } else {
-      // Detected at the same time
-      // TODO: figure out how to handle this
-      // IDEA: one with smaller # over 3 consec vals is the dir it was coming from
-      int lTotal = 0; int rTotal = 0;
-      for (uint8_t i = firstL; i < firstL + THRESHOLD_AMOUNT; i++) {
-        lTotal += lBuffer[i];
-        rTotal += rBuffer[i];
-      }
-      lTotal /= THRESHOLD_AMOUNT; rTotal /= THRESHOLD_AMOUNT;
-      if (lTotal < rTotal) {
-        Serial.println("Out");
-      } else {
-        Serial.println("In");
-      }
-    }
-    flushBuffers();
-  }
-}
-
-void initializeSensor() {
-  // Initialize the I2C controller
-  Wire.begin();
-  // Initialize the sensor
-  status = sensor.Begin();
-  if (status != VL53L1_ERROR_NONE) {
-    Serial.println("Could not initialize the sensor, error code: " + String(status));
-    while (1) {}
-  }
-  Serial.println("Sensor initialized");
-}
-
-void configureSensor() {
-  sensor.Init();
-  sensor.SetDistanceMode(2);
-  sensor.SetTimingBudgetInMs(20); 
-  sensor.SetInterMeasurementInMs(21); 
-  sensor.SetROI(8, 16); // 8x16 zones
-  sensor.SetROICenter(center[zone]); // Start on the left (167)
-  sensor.StartRanging(); // Start measuring
-}
-
-void outputResults() {
-  Serial.print("Ctr = ");
-  Serial.print(String(center[zone]));
-  Serial.print(", s - ");
-  Serial.print(String(rangeStatus));
-  Serial.print(", d = ");
-  Serial.println(String(distance));
-}
-
-// Loops 100 times to get an accurate baseline distance for calculations
-void calibrateBaseline() {
-  for (int i = 0; i < 100; i++) {
-    uint8_t dataReady = false;
-    while (!dataReady) {
-      sensor.CheckForDataReady(&dataReady);
-      delay(5);
-    }
-
-    sensor.GetDistanceInMm(&distance);
-    sensor.ClearInterrupt();
-
-    // Add measured distance to baseline
-    baseline[zone] += distance;
-
-    zone++;
-    zone = zone % 2;
-
-    sensor.SetROICenter(center[zone]);
-  }
-  // Take average of each measurement to use for baseline
-  baseline[0] = baseline[0] / 50;
-  baseline[1] = baseline[1] / 50;
-
-  thresholds[0] = baseline[0] - MIN_HEIGHT;
-  thresholds[1] = baseline[1] - MIN_HEIGHT;
-
-  Serial.print("Baseline measurements: L=");
-  Serial.print(String(baseline[0]));
-  Serial.print(", R=");
-  Serial.print(String(baseline[1]));
-  Serial.println();
-}
-
-void rightRotate(int* arr, int len)
+void setup(void)
 {
-  for (int i = len - 1; i > 0; i--) {
-    arr[i] = arr[i - 1];
-  }
-  arr[0] = 0;
+  Serial.begin(9600);
+  // Set up people counting on core 0
+  xTaskCreatePinnedToCore(
+    peopleCounterTaskFunction,
+    "PeopleCounterTask",
+    10000,
+    NULL,
+    1,
+    &PeopleCounterTaskHandler,
+    0
+  );
+  // Set up data publishing on core 1
+  xTaskCreatePinnedToCore(
+    publishDataTaskFunction,
+    "PublishDataTask",
+    10000,
+    NULL,
+    1,
+    &PublishDataTaskHandler,
+    1
+  );
 }
 
-void flushBuffers() {
-  for (int i = 0; i < BUFFER_LENGTH; i++) {
-    lBuffer[i] = 9999;
+// When using both cores, they each have their own "loop" function inside the task, this is not needed.
+void loop(void) {}
+
+// Runs repeatedely on core 0 - similar to loop, setup without multithreading
+void peopleCounterTaskFunction(void * pvParameters) {
+  // Setup
+  Serial.println("People Counter Running On Core 0");
+  // Configure sensor
+  Wire.begin();
+  if (lidarSensor.init() == false) {
+    Serial.println("Sensor online!");
+  }
+  lidarSensor.setIntermeasurementPeriod(100);
+  lidarSensor.setDistanceModeLong();
+
+  delay(1000);
+  // Calculate threshold amounts for zones
+  define_threshold();
+  // Loop
+  while (1) {
+    uint16_t distance;
+    lidarSensor.setROI(ROI_height, ROI_width, center[Zone]);  // first value: height of the zone, second value: width of the zone
+    delay(50);
+
+    lidarSensor.setTimingBudgetInMs(50);
+    lidarSensor.startRanging(); //Write configuration bytes to initiate measurement
+    distance = lidarSensor.getDistance(); //Get the result of the measurement from the sensor
+    lidarSensor.stopRanging();
+
+    // inject the new ranged distance in the people counting algorithm
+    processPeopleCountingData(distance, Zone);
+    Zone++;
+    Zone = Zone % 2;
+  }
+}
+
+// Runs repeatedly on core 1 
+void publishDataTaskFunction(void * pvParameters) {
+  // Setup
+  Serial.println("Data publisher running on core 1");
+  WiFiConnector wifi(WIFI_SSID, WIFI_PASSWORD);
+  AWSIoTConnector aws(AWS_CERT_CA, AWS_CERT_CRT, AWS_CERT_PRIVATE, AWS_IOT_ENDPOINT, AWS_IOT_PUBLISH_TOPIC, THING_NAME);
+  wifi.connect();
+  aws.connect();
+  // Loop
+  while (1) {
+    // Wait 5 minutes before publishing data
+     delay(300000);
+    // Build json
+    String json = "{\"total\":";
+    json += String(peopleInRoom);
+    json += ",";
+    json += "\"device\": \"";
+    json += DEVICE_ID;
+    json += "\"";
+    json += "}";
+    // Move json to buffer
+    unsigned int len = 50;
+    char jsonBuffer[len];
+    json.toCharArray(jsonBuffer, len);
+    // Publish
+    // Reconnect if the connection was lost
+    if (!wifi.isConnected())wifi.connect();
+    if (!aws.isConnected())aws.connect();
+    aws.publish(jsonBuffer);
+    Serial.println(json);
+  }
+}
+
+// Utility functions
+void define_threshold() {
+  delay(500);
+  Zone = 0;
+  float sum_zone_0 = 0;
+  float sum_zone_1 = 0;
+  uint16_t distance;
+  int number_attempts = 100;
+  for (int i = 0; i < number_attempts; i++) {
+    // increase sum of values in Zone 0
+    lidarSensor.setROI(ROI_height, ROI_width, center[Zone]);  // first value: height of the zone, second value: width of the zone
+    delay(50);
+    lidarSensor.setTimingBudgetInMs(50);
+    lidarSensor.startRanging(); //Write configuration bytes to initiate measurement
+    distance = lidarSensor.getDistance(); //Get the result of the measurement from the sensor
+    lidarSensor.stopRanging();
+    sum_zone_0 = sum_zone_0 + distance;
+    Zone++;
+    Zone = Zone % 2;
+
+    // increase sum of values in Zone 1
+    lidarSensor.setROI(ROI_height, ROI_width, center[Zone]);  // first value: height of the zone, second value: width of the zone
+    delay(50);
+    lidarSensor.setTimingBudgetInMs(50);
+    lidarSensor.startRanging(); //Write configuration bytes to initiate measurement
+    distance = lidarSensor.getDistance(); //Get the result of the measurement from the sensor
+    lidarSensor.stopRanging();
+    sum_zone_1 = sum_zone_1 + distance;
+    Zone++;
+    Zone = Zone % 2;
+  }
+  // after we have computed the sum for each zone, we can compute the average distance of each zone
+  float average_zone_0 = sum_zone_0 / number_attempts;
+  float average_zone_1 = sum_zone_1 / number_attempts;
+
+  float threshold_zone_0 = average_zone_0 * 80 / 100;
+  float threshold_zone_1 = average_zone_1 * 80 / 100;
+
+  DIST_THRESHOLD_MAX[0] = threshold_zone_0;
+  DIST_THRESHOLD_MAX[1] = threshold_zone_1;
+  delay(2000);
+}
+
+void handlePersonPassage(int zone) {
+  int change;
+  if (zone == 1) {
+    Serial.println("Out");
+    change = -1;
+    peopleInRoom--;
+  } else if (zone == 2) {
+    Serial.println("In");
+    change = 1;
+    peopleInRoom++;
+  } else {
+    change = 0;
+    Serial.println("Error, Unknown zone!");
+  }
+}
+
+// People Counting algorithm
+void processPeopleCountingData(int16_t Distance, uint8_t zone) {
+  int CurrentZoneStatus = NOBODY;
+  int AllZonesCurrentStatus = 0;
+  int AnEventHasOccured = 0;
+
+  if (Distance < DIST_THRESHOLD_MAX[Zone]) {
+    // Someone is in !
+    CurrentZoneStatus = SOMEONE;
+  }
+
+  // left zone
+  if (zone == LEFT) {
+
+    if (CurrentZoneStatus != LeftPreviousStatus) {
+      // event in left zone has occured
+      AnEventHasOccured = 1;
+
+      if (CurrentZoneStatus == SOMEONE) {
+        AllZonesCurrentStatus += 1;
+      }
+      // need to check right zone as well ...
+      if (RightPreviousStatus == SOMEONE) {
+        // event in left zone has occured
+        AllZonesCurrentStatus += 2;
+      }
+      // remember for next time
+      LeftPreviousStatus = CurrentZoneStatus;
+    }
+  }
+  // right zone
+  else {
+
+    if (CurrentZoneStatus != RightPreviousStatus) {
+
+      // event in left zone has occured
+      AnEventHasOccured = 1;
+      if (CurrentZoneStatus == SOMEONE) {
+        AllZonesCurrentStatus += 2;
+      }
+      // need to left right zone as well ...
+      if (LeftPreviousStatus == SOMEONE) {
+        // event in left zone has occured
+        AllZonesCurrentStatus += 1;
+      }
+      // remember for next time
+      RightPreviousStatus = CurrentZoneStatus;
+    }
+  }
+
+  // if an event has occured
+  if (AnEventHasOccured) {
+    if (PathTrackFillingSize < 4) {
+      PathTrackFillingSize ++;
+    }
+
+    // if nobody anywhere lets check if an exit or entry has happened
+    if ((LeftPreviousStatus == NOBODY) && (RightPreviousStatus == NOBODY)) {
+
+      // check exit or entry only if PathTrackFillingSize is 4 (for example 0 1 3 2) and last event is 0 (nobobdy anywhere)
+      if (PathTrackFillingSize == 4) {
+        // check exit or entry. no need to check PathTrack[0] == 0 , it is always the case
+        if ((PathTrack[1] == 1)  && (PathTrack[2] == 3) && (PathTrack[3] == 2)) {
+          // this is an entry
+          handlePersonPassage(1);
+        } else if ((PathTrack[1] == 2)  && (PathTrack[2] == 3) && (PathTrack[3] == 1)) {
+          // This an exit
+          handlePersonPassage(2);
+        }
+      }
+      for (int i = 0; i < 4; i++) {
+        PathTrack[i] = 0;
+      }
+      PathTrackFillingSize = 1;
+    }
+    else {
+      // update PathTrack
+      // example of PathTrack update
+      // 0
+      // 0 1
+      // 0 1 3
+      // 0 1 3 1
+      // 0 1 3 3
+      // 0 1 3 2 ==> if next is 0 : check if exit
+      PathTrack[PathTrackFillingSize - 1] = AllZonesCurrentStatus;
+    }
   }
 }
