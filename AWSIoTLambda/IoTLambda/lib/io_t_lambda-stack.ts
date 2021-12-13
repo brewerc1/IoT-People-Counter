@@ -64,8 +64,8 @@ export class IoTLambdaStack extends Stack {
       vpc,
       scaling: {
         autoPause: Duration.minutes(10), // default is to pause after 5 minutes of idle time
-        minCapacity: rds.AuroraCapacityUnit.ACU_8, // default is 2 Aurora capacity units (ACUs)
-        maxCapacity: rds.AuroraCapacityUnit.ACU_32, // default is 16 Aurora capacity units (ACUs)
+        minCapacity: rds.AuroraCapacityUnit.ACU_1, // default is 2 Aurora capacity units (ACUs)
+        maxCapacity: rds.AuroraCapacityUnit.ACU_4, // default is 16 Aurora capacity units (ACUs)
       },
       defaultDatabaseName: props.dbName,
       credentials: rds.Credentials.fromGeneratedSecret(props.dbUsername),

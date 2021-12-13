@@ -61,6 +61,7 @@ public class Handler implements RequestHandler<SQSEvent, SQSBatchResponse>{
       int deviceId;
       int total;
       String messageId = "";
+      sql = "INSERT INTO peopleCounter(device, total) VALUES(?,?)";
       for (SQSMessage message: sqsEvent.getRecords()) {
         try {
           logger.log("Processing: " + message.getBody());
@@ -72,7 +73,6 @@ public class Handler implements RequestHandler<SQSEvent, SQSBatchResponse>{
             deviceId = sqsMessage.get("device").getAsInt();
             total = sqsMessage.get("total").getAsInt();
 
-            sql = "INSERT INTO peopleCounter(device, total) VALUES(?,?)";
             stmt = conn.prepareStatement(sql);
             stmt.setInt(1, deviceId);
             stmt.setInt(2, total);
