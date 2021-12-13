@@ -95,14 +95,18 @@ public class Handler implements RequestHandler<SQSEvent, SQSBatchResponse>{
       stmt = conn.prepareStatement(select);
       ResultSet res = stmt.executeQuery();
       StringBuilder sb = new StringBuilder();
+      sb.append("[");
       while (res.next()) {
         sb.append("{\n");
-        sb.append("id: ").append(res.getString(1)).append(",\n");
-        sb.append("device: ").append(res.getString(2)).append(",\n");
-        sb.append("total: ").append(res.getString(3)).append(",\n");
-        sb.append("timestamp: ").append(res.getTimestamp(4));
+        sb.append("\t\"id\": ").append(res.getString(1)).append(",\n");
+        sb.append("\t\"device\": ").append(res.getString(2)).append(",\n");
+        sb.append("\t\"total\": ").append(res.getString(3)).append(",\n");
+        sb.append("\t\"timestamp\": ").append("\"").append(res.getTimestamp(4)).append("\"");
         sb.append("\n}\n");
+
+        if (res.next()) sb.append(",");
       }
+      sb.append("]");
       logger.log(sb.toString());
       // TODO: End testing
 
