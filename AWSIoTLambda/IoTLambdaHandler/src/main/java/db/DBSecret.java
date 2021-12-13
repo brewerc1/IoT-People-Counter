@@ -6,9 +6,11 @@ import com.amazonaws.services.secretsmanager.model.GetSecretValueRequest;
 import com.amazonaws.services.secretsmanager.model.GetSecretValueResult;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import lombok.Getter;
 
 import java.util.Base64;
 
+@Getter
 public class DBSecret {
     private final String dbName;
     private final String dbHostName;
@@ -35,25 +37,5 @@ public class DBSecret {
         dbPort = secretJson.get("port").getAsString();
         dbUsername = secretJson.get("username").getAsString();
         dbPassword = secretJson.get("password").getAsString();
-    }
-
-    public String getDbName() {
-        return dbName;
-    }
-
-    public String getDbHostName() {
-        return dbHostName;
-    }
-
-    public String getDbPort() {
-        return dbPort;
-    }
-
-    public String getDbUsername() {
-        return dbUsername;
-    }
-
-    public String getDbPassword() {
-        return dbPassword;
     }
 }
