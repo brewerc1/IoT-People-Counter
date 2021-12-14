@@ -12,7 +12,7 @@ The IoT Solution cosists of two components:
 
 Data is published to AWS IoT Core via MQTT using our WiFiConnector & AWSIoTConnector Libraries
 
-An IoT Rule automatically moves messages recieved in IoT to SQS for processing
+An AWS IoT Rule automatically moves messages recieved in IoT to SQS for processing
 
 Written using Arduino (C++)
 
