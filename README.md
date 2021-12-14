@@ -4,7 +4,7 @@
 
 ## IoT
 
-The IoT Solution cosists of two components:
+The IoT Solution consists of two components:
 * ESP32
 * VL53L1X Lidar Sensor
 
