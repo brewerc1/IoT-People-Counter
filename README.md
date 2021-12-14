@@ -1,7 +1,5 @@
 # IoT-People-Counter
 
-###### description
-
 ## Front End
 
 ## IoT
