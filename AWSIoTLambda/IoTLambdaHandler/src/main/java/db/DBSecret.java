@@ -6,24 +6,29 @@ import com.amazonaws.services.secretsmanager.model.GetSecretValueRequest;
 import com.amazonaws.services.secretsmanager.model.GetSecretValueResult;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import lombok.AccessLevel;
 import lombok.Getter;
 
 import java.util.Base64;
 
-@Getter
 public class DBSecret {
+    @Getter // Public
     private final String dbName;
+    @Getter(value = AccessLevel.PROTECTED)
     private final String dbHostName;
+    @Getter(value = AccessLevel.PROTECTED)
     private final String dbPort;
+    @Getter(value = AccessLevel.PROTECTED)
     private final String dbUsername;
+    @Getter(value = AccessLevel.PROTECTED)
     private final String dbPassword;
 
     public DBSecret(final String region, final String secretArn) {
         AWSSecretsManager secretsManager = AWSSecretsManagerClientBuilder.standard().withRegion(region).build();
-        String secret;
         GetSecretValueRequest getSecretValueRequest = new GetSecretValueRequest().withSecretId(secretArn);
         GetSecretValueResult getSecretValueResult = secretsManager.getSecretValue(getSecretValueRequest);
 
+        String secret;
         if (getSecretValueResult.getSecretString() != null)
             secret = getSecretValueResult.getSecretString();
         else
