@@ -47,3 +47,4 @@ AWSIoTLambda/IoTLambda/aws_account.ts
 AWSIoTLambda/IoTLambdaHandler/.gradle/
 AWSIoTLambda/IoTLambdaHandler/build/
 .idea/
+AWSIoTLambda/IoTLambda/cdk.context.json
