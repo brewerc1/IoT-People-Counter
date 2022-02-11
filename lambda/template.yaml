@@ -1,0 +1,34 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda function to process events from people counting IoT devices
+
+Parameters:
+  Table:
+    Type: String
+    Default: iot-informatics-plus-dynamo
+
+Resources:
+  PeopleCounterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          TABLE: !Ref Table
+
+      Events:
+        QueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt EventQueue.Arn
+            BatchSize: 3
+
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Table
+        - SQSPollerPolicy:
+            QueueName: !GetAtt EventQueue.QueueName
+
+  EventQueue:
+    Type: AWS::SQS::Queue
